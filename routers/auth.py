@@ -1,4 +1,3 @@
-# server/routers/auth.py
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
 from passlib.hash import bcrypt
@@ -6,8 +5,8 @@ from datetime import datetime
 
 router = APIRouter()
 
-# 실제로는 DB 세션 주입해서 써야 함
-fake_users = {}  # <- 일단 프론트 연동 테스트용
+# In-memory user store to demonstrate auth flow without a DB
+fake_users = {}  
 
 class SignUpIn(BaseModel):
     nickname: str
@@ -35,5 +34,6 @@ def login(payload: LoginIn):
     user = fake_users.get(payload.email)
     if not user or not bcrypt.verify(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
-    # 나중에 JWT 토큰으로 교체
-    return {"token": "dummy-session-token"}
+    
+    return {"access_token": "dummy-session-token", "token_type": "bearer"}
+
