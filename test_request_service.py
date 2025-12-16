@@ -20,7 +20,7 @@ headers = {
 }
 
 payload = {
-    "user_id": "1fd95601-f3ac-4cb0-b492-747c0c5b7cc7",  # 임시 uuid
+    "user_id": "1fd95601-f3ac-4cb0-b492-747c0c5b7cc7",  
     "sex": "M",
     "lo_age_value": 33,
 }
