@@ -1,34 +1,52 @@
-# routers/naver_directions.py
-from fastapi import APIRouter, HTTPException, Query
-import requests
 import os
+import logging
+
+import requests
+from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter(
     prefix="/naver",
     tags=["naver-directions"],
 )
 
+logger = logging.getLogger(__name__)
+
+# =========================
+# Environment configuration
+# =========================
+
 NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID")
 NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET")
 
 BASE_URL = "https://maps.apigw.ntruss.com/map-direction/v1/driving"
 
+# =========================
+# Directions endpoint
+# =========================
 
 @router.get("/directions")
 def get_directions(
-    start: str = Query(..., description="경도,위도 (예: 126.9780,37.5665)"),
-    goal: str = Query(..., description="경도,위도 (예: 126.9920,37.5700)"),
-    option: str = Query("traoptimal", description="경로 옵션 (traoptimal / trafast / tracomfort 등)"),
+    start: str = Query(..., description="Longitude,Latitude (e.g. 126.9780,37.5665)"),
+    goal: str = Query(..., description="Longitude,Latitude (e.g. 126.9920,37.5700)"),
+    option: str = Query(
+        "traoptimal",
+        description="Route option (traoptimal / trafast / tracomfort)",
+    ),
 ):
     """
-    네이버 Directions V1 Driving API 프록시 엔드포인트.
-    Flutter → (내 서버) → Naver API 구조로 사용.
+    Proxy endpoint for Naver Directions V1 Driving API.
+
+    Architecture:
+    Client (Flutter/Web) → Application Server → Naver Maps API
+
+    This endpoint hides API credentials from the client and
+    forwards routing responses transparently.
     """
     if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
-        # .env 안 읽힌 경우
+        logger.error("Naver API credentials are not configured.")
         raise HTTPException(
             status_code=500,
-            detail="NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 환경변수가 설정되지 않았습니다.",
+            detail="Naver API credentials are not configured.",
         )
 
     headers = {
@@ -43,29 +61,46 @@ def get_directions(
     }
 
     try:
-        resp = requests.get(BASE_URL, headers=headers, params=params, timeout=5)
+        response = requests.get(
+            BASE_URL,
+            headers=headers,
+            params=params,
+            timeout=5,
+        )
     except requests.RequestException as e:
+        logger.warning("Failed to call Naver Directions API: %s", e)
         raise HTTPException(
             status_code=502,
-            detail=f"Naver Directions 호출 실패: {e}",
+            detail="Failed to call Naver Directions API.",
         )
 
-    # 네이버 응답 코드 그대로 체크
-    if resp.status_code != 200:
+    if response.status_code != 200:
+        logger.warning(
+            "Naver API returned non-200 status: %s, body=%s",
+            response.status_code,
+            response.text,
+        )
         raise HTTPException(
-            status_code=resp.status_code,
-            detail=f"Naver API error: {resp.text}",
+            status_code=response.status_code,
+            detail="Naver Directions API returned an error response.",
         )
 
-    data = resp.json()
+    data = response.json()
 
-    # 네이버 JSON 내부 code 체크 (0이 정상)
+    # Naver API returns an internal 'code'; 0 indicates success
     if isinstance(data, dict) and data.get("code") != 0:
-        # 네이버가 내부 에러코드를 줄 때
+        logger.warning(
+            "Naver API internal error: code=%s, message=%s",
+            data.get("code"),
+            data.get("message"),
+        )
         raise HTTPException(
             status_code=400,
-            detail={"naver_code": data.get("code"), "naver_message": data.get("message")},
+            detail={
+                "naver_code": data.get("code"),
+                "naver_message": data.get("message"),
+            },
         )
 
-    # 정상일 때 네이버 JSON 그대로 프론트에 전달
+    # Forward successful response payload as-is
     return data
