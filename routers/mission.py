@@ -1,4 +1,3 @@
-# backend/routers/mission.py
 from fastapi import APIRouter
 
 router = APIRouter()
